@@ -1,5 +1,7 @@
 # Ticketing API
 
+[![CI](https://github.com/kkijo/ticketing/actions/workflows/ci.yml/badge.svg)](https://github.com/kkijo/ticketing/actions/workflows/ci.yml)
+
 Сервис продажи билетов на мероприятия с выбором конкретного места на карте зала: пользователь видит схему зала, выбирает места, они блокируются на 10 минут под оплату, после оплаты он получает билеты с QR-кодом. На входе контролёр сканирует QR — билет гасится, повторный проход невозможен.
 
 **Стек:** FastAPI · SQLAlchemy 2.0 (async) · PostgreSQL 16 · Redis 7 · ARQ · Stripe (test mode) · Docker
@@ -120,6 +122,7 @@ await session.commit()
 - **`async with session.begin()` — анти-паттерн в SQLAlchemy 2.0.** Autobegin стартует транзакцию на первом `execute()`. Вызывайте `commit()` / `rollback()` явно.
 - **Кэш карты зала нужно инвалидировать на каждое изменение.** Мы инвалидируем в `POST /orders`, `POST /orders/{id}/cancel` и в воркере `expire_holds`. Забыть любой из них → «свободные» места ещё 3 секунды.
 - **Никогда не передавайте ORM-объект через `asyncio.to_thread` или `session.rollback()`.** Только `UUID`, `int`, `str`. Это граница слоёв.
+- **`Base.metadata.drop_all` в `conftest.py` ломает миграции.** Если дропать таблицы в teardown тестов, `alembic_version` остаётся и указывает на несуществующие таблицы. В итоге любой `alembic downgrade` падает. Решение: `make test` сначала делает `alembic upgrade head`, а между тестами таблицы очищаются через `TRUNCATE`.
 
 ---
 
