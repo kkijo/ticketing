@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ticketing
+      POSTGRES_PASSWORD: ticketing
+      POSTGRES_DB: ticketing
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketing -d ticketing"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ticketing:ticketing@postgres:5432/ticketing
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["8000:8000"]
+    volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+
+  worker:
+    build: .
+    command: arq app.workers.settings.WorkerSettings
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ticketing:ticketing@postgres:5432/ticketing
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - ./app:/app/app
+
+volumes:
+  pgdata:
